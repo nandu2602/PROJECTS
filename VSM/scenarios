@@ -1,0 +1,501 @@
+import  streamlit as st
+import pandas as pd
+import plotly.express as px
+d='delhi'
+H_data=pd.read_csv(d+'/vehicles.csv')
+H_data.set_index('Year')
+H_data= H_data.applymap(lambda val: str(val).replace(',', '').strip())
+H_data= H_data.applymap(lambda val: str(val).replace('-', '0').replace(',', '').strip())
+H_data = H_data.replace('-', '0')
+H_data = H_data.replace(',', '', regex=True)
+H_data = H_data.apply(pd.to_numeric, errors='coerce')
+H_data = H_data.fillna(0)
+H_data = H_data.astype(int)
+
+
+st.write('Scenarios will be made here')
+petrol=pd.read_csv('delhi/petrol.csv')
+diesel=pd.read_csv('delhi/diesel.csv')
+cng_=pd.read_csv('delhi/CNG.csv')
+
+col1,col2=st.columns(2,gap='small',vertical_alignment='top')
+with col1:
+    cng=st.number_input('CNG PENETRATION',min_value=0,max_value=100)
+    year=st.number_input('Year',min_value=2025,max_value=2040)
+with col2:
+    electric=st.number_input('ELECTRIC PENETRATION',min_value=0,max_value=100)
+    type=st.selectbox('VEHICLE TYPE',('2-Wheeler','Car',"LGV",'3-Wheeler-Passanger',"3-Wheeler-Goods",'Bus','Taxi'))
+
+
+
+vehicle_config = {
+    ("2-Wheeler", "Petrol"): {
+        "pos": "2w",
+        'fuel_df':pd.read_csv('delhi/petrol.csv'),
+        "bs_2_em": 0.0313,
+        "bs_4_em": 0.0313,
+        "bs_6_em": 0.0045,
+        "mileage": 9900
+    },
+    ("2-Wheeler", "Electric"): {
+        'pos':'2w',
+        'fuel_df':pd.read_csv('delhi/electric.csv'),
+        "bs_2_em": 0,
+        "bs_4_em": 0,
+        "bs_6_em": 0,
+        "mileage": 9900
+    },
+    ("Car", "Petrol"): {
+        "pos": "car",
+        'fuel_df':pd.read_csv('delhi/petrol.csv'),
+        "bs_2_em": 0.0367,
+        "bs_4_em": 0.0367,
+        "bs_6_em": 0.0045,
+        "mileage": 11550
+    },
+    ("Car", "Diesel"): {
+        "pos": "car",
+        'fuel_df':pd.read_csv('delhi/diesel.csv'),
+        "bs_2_em": 0.0741,
+        "bs_4_em": 0.0741,
+        "bs_6_em": 0.0045,
+        "mileage": 11550
+    },
+    ('Car','CNG'):{
+        "pos": "car",
+        'fuel_df':pd.read_csv('delhi/CNG.csv'),
+        "bs_2_em": 0.0126,
+        "bs_4_em": 0.0126,
+        "bs_6_em": 0.0045,
+        "mileage": 11550  
+    },
+    ('Car','Electric'):{
+        "pos": "car",
+        'fuel_df':pd.read_csv('delhi/electric.csv'),
+        "bs_2_em": 0,
+        "bs_4_em": 0,
+        "bs_6_em": 0,
+        "mileage": 11550  
+    },
+    ("Bus", "Diesel"): {
+        "pos": "bus",
+        'fuel_df':pd.read_csv('delhi/diesel.csv'),
+        "bs_2_em": 0.0520,
+        "bs_4_em": 0.0520,
+        "bs_6_em": 0.0172,
+        "mileage": 74250
+    },
+    ("Bus", "CNG"): {
+        "pos": "bus",
+        'fuel_df':pd.read_csv('delhi/CNG.csv'),
+        "bs_2_em": 0.0520,
+        "bs_4_em": 0.0520,
+        "bs_6_em": 0.0172,
+        "mileage": 74250
+    },
+    ("Bus", "Electric"): {
+        "pos": "bus",
+        'fuel_df':pd.read_csv('delhi/electric.csv'),
+        "bs_2_em": 0,
+        "bs_4_em": 0,
+        "bs_6_em": 0,
+        "mileage": 74250
+    },
+    ("Bus", "Petrol"): {
+        "pos": "bus",
+        'fuel_df':pd.read_csv('delhi/electric.csv'),
+        "bs_2_em": 0,
+        "bs_4_em": 0,
+        "bs_6_em": 0,
+        "mileage": 74250
+    },
+
+    ("Taxi", "Diesel"): {
+        "pos": "taxi",
+        'fuel_df':pd.read_csv('delhi/diesel.csv'),
+        "bs_2_em": 0.0367,
+        "bs_4_em": 0.0367,
+        "bs_6_em": 0.0045,
+        "mileage": 66000
+    },
+    ("Taxi", "Petrol"): {
+        "pos": "taxi",
+        'fuel_df':pd.read_csv('delhi/petrol.csv'),
+        "bs_2_em": 0.0367,
+        "bs_4_em": 0.0367,
+        "bs_6_em": 0.0045,
+        "mileage": 66000
+    },
+    ("Taxi", "CNG"): {
+        "pos": "taxi",
+        'fuel_df':pd.read_csv('delhi/CNG.csv'),
+        "bs_2_em": 0.0126,
+        "bs_4_em": 0.0126,
+        "bs_6_em": 0.0045,
+        "mileage": 66000
+    },
+    ("Taxi", "Electric"): {
+        "pos": "taxi",
+        'fuel_df':pd.read_csv('delhi/electric.csv'),
+        "bs_2_em": 0,
+        "bs_4_em": 0,
+        "bs_6_em": 0,
+        "mileage": 66000
+    },
+    ("3-Wheeler-Passanger", "Petrol"): {
+        "pos": "3wp",
+        'fuel_df':pd.read_csv('delhi/petrol.csv'),
+        "bs_2_em": 0.0590,
+        "bs_4_em": 0.0590,
+        "bs_6_em": 0.0250,
+        "mileage": 33000
+    },
+    ("3-Wheeler-Passanger", "CNG"): {
+        "pos": "3wp",
+        'fuel_df':pd.read_csv('delhi/CNG.csv'),
+        "bs_2_em": 0.0590,
+        "bs_4_em": 0.0590,
+        "bs_6_em": 0.0250,
+        "mileage": 33000
+    },
+    ("3-Wheeler-Passanger", "Electric"): {
+        "pos": "3wp",
+        'fuel_df':pd.read_csv('delhi/electric.csv'),
+        "bs_2_em": 0,
+        "bs_4_em": 0,
+        "bs_6_em": 0,
+        "mileage": 33000
+    },
+    ("3-Wheeler-Goods", "Petrol"): {
+        "pos": "3wg",
+        'fuel_df':pd.read_csv('delhi/petrol.csv'),
+        "bs_2_em": 0.0590,
+        "bs_4_em": 0.0590,
+        "bs_6_em": 0.0250,
+        "mileage": 33000
+    },
+    ("3-Wheeler-Goods", "CNG"): {
+        "pos": "3wg",
+        'fuel_df':pd.read_csv('delhi/CNG.csv'),
+        "bs_2_em": 0.0590,
+        "bs_4_em": 0.0590,
+        "bs_6_em": 0.0250,
+        "mileage": 33000
+    },
+    ("3-Wheeler-Goods", "Electric"): {
+        "pos": "3wg",
+        'fuel_df':pd.read_csv('delhi/electric.csv'),
+        "bs_2_em": 0,
+        "bs_4_em": 0,
+        "bs_6_em": 0,
+        "mileage": 33000
+    },
+    ("LGV", "Petrol"): {
+        "pos": "car",
+        'fuel_df':pd.read_csv('delhi/petrol.csv'),
+        "bs_2_em": 0.0367,
+        "bs_4_em": 0.0367,
+        "bs_6_em": 0.0045,
+        "mileage": 16500
+    },
+    ("LGV", "Diesel"): {
+        "pos": "car",
+        'fuel_df':pd.read_csv('delhi/diesel.csv'),
+        "bs_2_em": 0.0741,
+        "bs_4_em": 0.0741,
+        "bs_6_em": 0.0045,
+        "mileage": 16500
+    },
+    ('LGV','CNG'):{
+        "pos": "car",
+        'fuel_df':pd.read_csv('delhi/CNG.csv'),
+        "bs_2_em": 0.0126,
+        "bs_4_em": 0.0126,
+        "bs_6_em": 0.0045,
+        "mileage": 16500  
+    },
+    ('LGV','Electric'):{
+        "pos": "car",
+        'fuel_df':pd.read_csv('delhi/electric.csv'),
+        "bs_2_em": 0,
+        "bs_4_em": 0,
+        "bs_6_em": 0,
+        "mileage": 16500  
+    }
+  }
+
+
+
+def bau_emission(y,fuel_df,bs_2_em,bs_4_em,bs_6_em,mileage,pos):
+  survival_df=pd.read_csv('delhi/survival.csv')
+  bs_2=0
+  bs_4=0
+  bs_6=0
+  s_index=(y-2000)
+  year=2000
+  for i in range(0,(y-2000)+1):
+    if y<2000:
+      break 
+    else:
+      split=fuel_df.at[i,pos]
+      survival=survival_df.at[s_index,pos]
+      t=H_data.at[i, pos]*split*survival
+      if year<2010:
+        bs_2+=t
+      elif year<2018:
+        bs_4+=t
+      else:
+        bs_6+=t
+    y-=1
+    year+=1
+    s_index-=1
+
+  emission_total=int(((bs_2)*bs_2_em*mileage)/(10**6))+int(((bs_4)*bs_4_em*mileage)/(10**6))+int(((bs_6)*bs_6_em*mileage)/(10**6))
+  return emission_total
+
+
+def stock_data(y,fuel_df,penetration,pos):
+  survival_df=pd.read_csv('delhi/survival.csv')
+  bs_2=0
+  bs_4=0
+  bs_6=0
+  s_index=(y-2000)
+  year=2000
+  j=0
+  electric_stock_bau=0
+  electric_stock_scenario=0
+  for i in range(0,(y-2000)+1):
+    if y<2000:
+      break 
+    else:
+      split=fuel_df.at[i,pos]
+      survival=survival_df.at[s_index,pos] 
+      total_stock=H_data.at[i, pos]*survival
+      if year<2010:
+        bs_2+=total_stock
+        electric_stock_bau+=H_data.at[i, pos]*survival*split
+        electric_stock_scenario+=H_data.at[i, pos]*survival*split
+      elif year<2018:
+        bs_4+=total_stock
+        electric_stock_bau+=H_data.at[i, pos]*survival*split
+        electric_stock_scenario+=H_data.at[i, pos]*survival*split
+      elif year<2025:
+        bs_6+=total_stock
+        electric_stock_scenario+=H_data.at[i, pos]*survival*split
+        electric_stock_bau+=H_data.at[i, pos]*survival*split
+      else:
+        total_stock=H_data.at[i,pos]*survival
+        bs_6+=total_stock
+        electric_stock_bau+=H_data.at[i, pos]*survival*split
+        electric_stock_scenario+=H_data.at[i, pos]*survival*penetration[j]
+        j+=1
+        
+    y-=1
+    year+=1
+    s_index-=1
+  return electric_stock_scenario,electric_stock_bau,bs_2,bs_4,bs_6 
+
+
+
+
+
+def bau_emission_scenario(y,fuel_df,bs_2_em,bs_4_em,bs_6_em,mileage,penetration,pos):
+  survival_df=pd.read_csv('delhi/survival.csv')
+  bs_2=0
+  bs_4=0
+  bs_6=0
+  s_index=(y-2000)
+  year=2000
+  j=0
+  for i in range(0,(y-2000)+1):
+    if y<2000:
+      break 
+    else:
+      split=fuel_df.at[i,pos]
+      survival=survival_df.at[s_index,pos] 
+      t=H_data.at[i, pos]*split*survival
+      if year<2010:
+        bs_2+=t
+      elif year<2018:
+        bs_4+=t
+      elif year<2025:
+        bs_6+=t
+      else:
+        t=H_data.at[i,pos]*penetration[j]*survival
+        j+=1
+        bs_6+=t
+    y-=1
+    year+=1
+    s_index-=1
+
+  emission_total=int(((bs_2)*bs_2_em*mileage)/(10**6))+int(((bs_4)*bs_4_em*mileage)/(10**6))+int(((bs_6)*bs_6_em*mileage)/(10**6))
+  return emission_total
+
+def penetration(electric,cng,pos,year):
+    electric_df=pd.read_csv('delhi/electric.csv')
+    base_electric=electric_df.at[24,pos]
+    time_period=year-2024
+    slope=((electric/100)-base_electric)/time_period
+    penetration_electric=[]
+    for i in range (0,time_period):
+        base_electric+=slope
+        penetration_electric+=[base_electric]
+
+    cng_df=pd.read_csv('delhi/cng.csv')
+    base_cng=cng_df.at[24,pos]
+    time_period=year-2024
+    slope=((cng/100)-base_cng)/time_period
+    penetration_cng=[]
+    for i in range (0,time_period):
+        base_cng+=slope
+        penetration_cng+=[base_cng]      
+
+    petrol_df=pd.read_csv('delhi/petrol.csv')
+    diesel_df=pd.read_csv('delhi/diesel.csv')
+    base_petrol=petrol_df.at[24,pos]
+    print('petrol;',base_petrol)
+    base_diesel=diesel_df.at[24,pos]
+    print('diesel:',base_diesel)
+    total=base_petrol+base_diesel
+    if total==0:
+        print('TOTAL IS ZERO ')
+        petrol_fuel_share=0
+        diesel_fuel_share=0
+    else:
+        petrol_fuel_share=base_petrol/total
+        diesel_fuel_share=base_diesel/total
+    length=len(penetration_electric)
+    penetration_petrol=[]
+    penetration_diesel=[]
+    for i in range(0,length):
+       balance=1-(penetration_cng[i]+penetration_electric[i])
+       penetration_petrol+=[balance*petrol_fuel_share]
+       penetration_diesel+=[balance*diesel_fuel_share]
+    
+    return penetration_electric,penetration_cng,penetration_petrol,penetration_diesel
+
+       
+key=(type,'Petrol')
+config=vehicle_config[key]
+df_petrol=pd.read_csv('delhi/petrol.csv')
+df_diesel=pd.read_csv('delhi/diesel.csv')       
+
+if electric+cng>100:
+   st.write('the fuel penetration of CNG and Electric eceeds 100%')
+else:
+   balance=(100-(electric+cng))/100
+   pos=config['pos']
+   mileage=config['mileage']
+   bau=[]
+   scenario=[]
+   Year=[]
+   petrol_split=(df_petrol.at[24,pos])
+   print('petrol;',petrol_split)
+   diesel_split=(df_diesel.at[24,pos])
+   total_split=petrol_split+diesel_split
+   if total_split==0:
+      petrol_fuel_share=0
+      diesel_fuel_share=0
+   else: 
+      petrol_fuel_share=balance*(petrol_split/total_split)
+      diesel_fuel_share=balance*(diesel_split/total_split)
+   em=0
+   em_scenario=0  
+   for y in range (2025,year+1):
+        em1=0
+        em_scenario1=0
+        
+        penetration_electric,penetration_cng,penetration_petrol,penetration_diesel=penetration(electric,cng,pos,year)
+
+        key=(type,'Petrol')
+        if key in vehicle_config.keys():
+            config=vehicle_config[type,'Petrol']
+            df=pd.read_csv('delhi/petrol.csv')
+            bs_2_em=config['bs_2_em']
+            bs_4_em=config['bs_4_em']
+            bs_6_em=config['bs_6_em']
+            em+=bau_emission(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,pos)
+            em_scenario+=bau_emission_scenario(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,penetration_petrol,pos)
+            em1+=bau_emission(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,pos)
+            em_scenario1+=bau_emission_scenario(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,penetration_petrol,pos)
+           
+        key=(type,'Diesel')   
+        if key in vehicle_config.keys():
+            config=vehicle_config[type,'Diesel']
+            df=pd.read_csv('delhi/diesel.csv')
+            bs_2_em=config['bs_2_em']
+            bs_4_em=config['bs_4_em']
+            bs_6_em=config['bs_6_em']
+            em_scenario+=bau_emission_scenario(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,penetration_diesel,pos)
+            em+=bau_emission(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,pos)
+            em_scenario1+=bau_emission_scenario(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,penetration_diesel,pos)
+            em1+=bau_emission(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,pos)
+            
+        key=(type,'CNG')
+        if key in vehicle_config.keys():
+            config=vehicle_config[type,'CNG']
+            df=pd.read_csv('delhi/CNG.csv')
+            bs_2_em=config['bs_2_em']
+            bs_4_em=config['bs_4_em']
+            bs_6_em=config['bs_6_em']
+            em_scenario+=bau_emission_scenario(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,penetration_cng,pos)
+            em+=bau_emission(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,pos) 
+            em_scenario1+=bau_emission_scenario(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,penetration_cng,pos)
+            em1+=bau_emission(y,df,bs_2_em,bs_4_em,bs_6_em,mileage,pos) 
+        bau+=[em1]
+        scenario+=[em_scenario1]
+        Year+=[str(y)]
+   fuel_df=pd.read_csv('delhi/electric.csv') 
+   
+
+   data=pd.DataFrame ({'Year': Year,'BAU':bau,'Scenario':scenario})
+   fig=px.line(data,x=data["Year"],y=['BAU','Scenario'])
+   fig.update_layout(
+    title="Emission vs year",
+    xaxis_title="year",
+    yaxis_title="Emissions in tonnes"
+    )
+   fig.update_xaxes(type='category')
+   st.plotly_chart(fig)
+
+
+   # pie chart 
+   electric_stock_scenario,electric_stock_bau,bs_2,bs_4,bs_6=stock_data(y,fuel_df,penetration_electric,pos)
+   source_stock = pd.DataFrame({"category": ['BS-II & BS-III','BS-IV','BS_VI'], "value": [bs_2,bs_4,bs_6]})
+   fig1= px.pie(source_stock, names='category', values='value',hole=0.5,color='category',color_discrete_map=
+                {'BS-II & BS-III': '#029bd6',
+                  'BS-IV': '#7F7F7F',
+                  'BS_VI':'#e85724'})
+   fig1.update_traces(textinfo='percent')
+   fig1.update_layout(title_text='Norm-wise emission in tons/yr')
+   fig1.update_layout(legend=dict(
+      orientation="h",
+      yanchor="bottom",
+      y=-0.1,
+      xanchor="center",
+      x=0.5
+  ))
+   
+   col1,col2=st.columns([2,1],gap='small',vertical_alignment='center')
+   with col1:
+    st.plotly_chart(fig1)
+   with col2:
+    change=int(((electric_stock_scenario-electric_stock_bau)/electric_stock_bau)*100)
+    st.metric(label='Extra electric stock',
+                    value=int(electric_stock_scenario-electric_stock_bau))
+      
+
+      
+   
+
+
+
+
+   a,b,c,d=penetration(electric,cng,pos,year)
+   col1,col2=st.columns(2,gap='small',vertical_alignment='center')
+   delta_scenario=((em_scenario-em)/em)*100
+   with col1:
+      st.metric(label='BAU cumilative emissions',value=str(em)+' tonnes',border=True)
+   with col2:
+      st.metric(label='Scenario emissions',value=str(em_scenario)+' tonnes',delta=str(int(delta_scenario))+'%',delta_color='inverse',border=True)
+
