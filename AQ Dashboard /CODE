@@ -1,0 +1,241 @@
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+from windrose import WindroseAxes
+import plotly.express as px
+
+
+AQ_data = r"D:\CEEW_deliverables\AQ Dashboard\AQ data.csv"
+df_out= pd.read_csv(AQ_data)
+df_out["datetime"] = pd.to_datetime(df_out["date"], errors="coerce")
+df_out["PM2.5_outdoor"] = pd.to_numeric(df_out["pm2.5"], errors="coerce")
+df_out["PM10_outdoor"]  = pd.to_numeric(df_out["pm10"], errors="coerce")
+df_out=df_out[["datetime","PM2.5_outdoor","PM10_outdoor"]]
+df_out = df_out.set_index("datetime").resample("1T").mean().reset_index()
+
+
+#indoor data cleaning 
+indoor_path = r"D:\CEEW_deliverables\AQ Dashboard\AQ_indoor.csv"
+df_in = pd.read_csv(indoor_path)
+df_in.columns = df_in.columns.str.strip()
+df_in["datetime"] = pd.to_datetime(
+        df_in["Date"].astype(str) + " " + df_in["Time"].astype(str),
+        dayfirst=True,
+        errors="coerce"
+    )
+df_in["PM2.5_indoor"] = pd.to_numeric(df_in["PM2.5"], errors="coerce")
+df_in["PM10_indoor"]  = pd.to_numeric(df_in["PM10"], errors="coerce")
+df_in=df_in[["datetime","PM2.5_indoor","PM10_indoor"]]
+df_in = df_in.set_index("datetime").resample("1T").mean().reset_index()
+
+
+#wheather data cleaning 
+df_wtr=pd.read_csv( r"D:\CEEW_deliverables\AQ Dashboard\aws2025.txt" , sep="\t")
+df_wtr.columns = df_wtr.iloc[0].astype(str).str.strip()
+df_wtr= df_wtr[1:].reset_index(drop=True)
+df_wtr.columns = (
+    pd.Series(df_wtr.columns)
+    .apply(lambda x: x.strip())
+    .pipe(lambda s: s + s.groupby(s).cumcount().astype(str).str.replace("0",""))
+)
+df_wtr['datetime']=pd.to_datetime(
+        df_wtr["Date"].astype(str) + " " + df_wtr["Time"].astype(str),
+        dayfirst=True,
+        errors="coerce"
+    )
+df_wtr.columns = df_wtr.columns.astype(str).str.strip()
+df_wtr["Temp"]  = pd.to_numeric(df_wtr["Temp"], errors="coerce")
+df_wtr["Hum"]  = pd.to_numeric(df_wtr["Hum"], errors="coerce")
+df_wtr=df_wtr[["datetime","Temp","Hum"]]
+df_wtr = df_wtr.set_index("datetime").resample("1H").mean().reset_index()
+
+df=pd.merge(
+    df_out,
+    df_in,
+    on="datetime",
+    how="inner"     
+)
+
+#streamlit code for date filters
+st.set_page_config(page_title="PM Dashboard", layout="wide")
+min_date = df["datetime"].min()
+max_date = df["datetime"].max()
+start_date = st.date_input("Start Date", min_date)
+end_date = st.date_input("End Date", max_date)
+
+mask = (df["datetime"] >= pd.to_datetime(start_date)) & (df["datetime"] <= pd.to_datetime(end_date))
+filtered = df[mask].sort_values("datetime")
+
+mask_wtr = (df_wtr["datetime"] >= pd.to_datetime(start_date)) & (df_wtr["datetime"] <= pd.to_datetime(end_date))
+filtered_wtr= df_wtr[mask_wtr].sort_values("datetime")
+filtered=filtered.dropna()
+filtered_wtr=filtered_wtr.dropna()
+
+
+pm25_min = df["PM2.5_outdoor"].min()
+pm25_max = df["PM2.5_outdoor"].max()
+
+temp_min = df_wtr["Temp"].min()
+temp_max = df_wtr["Temp"].max()
+
+
+#PM2.5 vs temp chart 
+fig = go.Figure()
+
+fig.add_trace(go.Scatter(
+    x=filtered["datetime"],
+    y=filtered["PM2.5_outdoor"],
+    mode="lines",
+    name="PM2.5",
+    yaxis='y1',
+    line=dict(color='#023F5C')
+))
+
+fig.add_trace(go.Scatter(
+    x=filtered_wtr["datetime"],
+    y=filtered_wtr["Temp"],
+    mode="lines",
+    name="Temp",
+    yaxis='y2',
+    line=dict(color='#e85724')  
+))
+
+fig.update_layout(
+    title="PM2.5 vs Temp",
+    xaxis=dict(title="Datetime"),
+    
+    yaxis=dict(
+        title="PM2.5 (µg/m³)",
+        side="left",
+        range=[pm25_min, pm25_max] 
+        ),
+    
+    yaxis2=dict(
+        title="Temp (C)",
+        overlaying="y",
+        side="right",
+        range=[temp_min, temp_max] 
+    ),
+
+    template="plotly_white",
+    hovermode="x unified"
+)
+st.plotly_chart(fig, use_container_width=True)
+
+
+#PM indoor v/s outdoor chart
+fig2 = go.Figure()
+
+fig2.add_trace(go.Scatter(
+    x=filtered["datetime"],
+    y=filtered["PM2.5_outdoor"],
+    mode="lines",
+    name="PM2.5 Outdoor",
+    line=dict(color='#023F5C')
+))
+
+fig2.add_trace(go.Scatter(
+    x=filtered["datetime"],
+    y=filtered["PM2.5_indoor"],
+    mode="lines",
+    name="PM2.5 Indoor",
+    line=dict(color='#58AEDB')
+))
+fig2.update_layout(
+    title="Indoor vs Outdoor PM Levels",
+    xaxis_title="Datetime",
+    yaxis_title="Concentration (µg/m³)",
+    hovermode="x unified",
+    template="plotly_white",
+    yaxis=dict(range=[0, 1000])
+)
+
+
+
+# ------------------ TRUE TYPE-A WIND ROSE ------------------
+
+df = pd.read_csv(r"D:\CEEW_deliverables\AQ Dashboard\aws2025.txt", sep="\t")
+df = df[1:].reset_index(drop=True)
+
+# Wind direction mapping
+direction_map = {
+    "N": 0, "NNE": 22.5, "NE": 45, "ENE": 67.5,
+    "E": 90, "ESE": 112.5, "SE": 135, "SSE": 157.5,
+    "S": 180, "SSW": 202.5, "SW": 225, "WSW": 247.5,
+    "W": 270, "WNW": 292.5, "NW": 315, "NNW": 337.5
+}
+
+# Datetime clean
+df["datetime"] = pd.to_datetime(
+    df["Unnamed: 0"].astype(str) + " " + df["Unnamed: 1"].astype(str),
+    dayfirst=True,
+    errors="coerce"
+)
+
+# Clean wind dataframe
+df["Wind.1"] = df["Wind.1"].astype(str).str.upper().str.strip()
+
+df_wind = pd.DataFrame({
+    "windspeed": pd.to_numeric(df["Wind"], errors="coerce"),
+    "wind_dir": df["Wind.1"].map(direction_map),
+    "datetime": df["datetime"]
+})
+
+df_wind = df_wind.dropna()
+
+# Apply filter
+mask = (df_wind["datetime"] >= pd.to_datetime(start_date)) & \
+       (df_wind["datetime"] <= pd.to_datetime(end_date))
+filtered_wind = df_wind[mask]
+
+# Bin wind speeds
+filtered_wind["speed_bin"] = pd.cut(
+    filtered_wind["windspeed"],
+    bins=[0, 1, 2, 3, 4, 20],
+    labels=["0–1", "1–2", "2–3", "3–4", "4+"]
+)
+
+# This is CRITICAL for Type A Wind Rose:
+# Aggregate to get FREQUENCY for each direction + speed-bin
+wind_freq = filtered_wind.groupby(["wind_dir", "speed_bin"]).size().reset_index(name="frequency")
+
+# Sort by wind direction
+wind_freq = wind_freq.sort_values("wind_dir")
+
+# Colors for the 5 speed bins
+bin_colors = ["#58AEDB", "#036493", "#8CB73F", "#E85724", "#312E2D"]
+
+# Create Type-A Wind Rose
+fig = px.bar_polar(
+    wind_freq,
+    r="frequency",        # Frequency (NOT wind speed)
+    theta="wind_dir",     # Direction (degrees)
+    color="speed_bin",
+    template="plotly_white",
+    color_discrete_sequence=bin_colors,
+    title="Wind Rose (Frequency)"
+)
+
+fig.update_layout(
+    polar=dict(
+        radialaxis=dict(showgrid=True, gridcolor="#7F7F7F"),
+        angularaxis=dict(showgrid=True, gridcolor="#7F7F7F"),
+        bgcolor="white"
+    )
+)
+
+
+
+col1,col2=st.columns([3,4])
+with col2:
+    st.plotly_chart(fig2, use_container_width=True)
+
+with col1:
+    st.plotly_chart(fig, use_container_width=True)
+    c1,c2=st.columns([1,1])
+    with c1:
+        st.metric(label='Avg Humidity', value=round(filtered_wtr['Hum'].fillna(0).mean(),2))
+    with c2:
+        st.metric(label='Avg Humidity', value=round(filtered_wtr['Temp'].fillna(0).mean(),2))
+
