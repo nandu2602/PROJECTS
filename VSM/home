@@ -1,0 +1,20 @@
+import streamlit as st
+
+# -----page set up------
+
+dashboard=st.Page (
+    page="pages/dashboard.py",
+    title='Prediction Dashboard',
+    default=True
+)
+
+scenarios=st.Page(
+    page='pages/scenarios.py',
+    title='Scenario Building'
+)
+
+pg=st.navigation(pages=[dashboard,scenarios])
+pg.run()
+
+
+#H_data.at[i,pos]*
